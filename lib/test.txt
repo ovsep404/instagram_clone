@@ -1,0 +1,33 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+Future<void> fetchInstagramData(String accessToken) async {
+  final response = await http.get(
+    Uri.parse('https://graph.instagram.com/me?fields=id,username,media_count,followers_count&access_token=$accessToken'),
+  );
+
+  if (response.statusCode == 200) {
+    var data = jsonDecode(response.body);
+    print('Username: ${data['username']}');
+    print('Number of posts: ${data['media_count']}');
+    print('Number of followers: ${data['followers_count']}');
+
+    // To fetch the images, you need to make another request to the media endpoint
+    final mediaResponse = await http.get(
+      Uri.parse('https://graph.instagram.com/me/media?fields=id,media_type,media_url,thumbnail_url,permalink&access_token=$accessToken'),
+    );
+
+    if (mediaResponse.statusCode == 200) {
+      var mediaData = jsonDecode(mediaResponse.body);
+      for (var media in mediaData['data']) {
+        if (media['media_type'] == 'IMAGE') {
+          print('Image URL: ${media['media_url']}');
+        }
+      }
+    } else {
+      throw Exception('Failed to load media');
+    }
+  } else {
+    throw Exception('Failed to load user data');
+  }
+}
