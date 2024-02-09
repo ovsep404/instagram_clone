@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^0.13.3
+  cloud_firestore: ^4.15.4
+  firebase_core: ^2.25.4
+  firebase_storage: ^11.6.5
+  path_provider: ^2.1.2
 
 dev_dependencies:
   flutter_test:

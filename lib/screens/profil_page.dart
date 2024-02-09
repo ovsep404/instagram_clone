@@ -1,46 +1,152 @@
-import 'package:flutter/material.dart';
+import 'dart:math';
 
-// Définition de la classe ProfilePage qui hérite de StatefulWidget
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:clone_instagram/user_profile.dart';
+
+// Définition de la classe ProfilePage qui est un StatefulWidget
 class ProfilePage extends StatefulWidget {
   @override
   _ProfilePageState createState() => _ProfilePageState();
 }
 
-// Définition de la classe _ProfilePageState qui hérite de State<ProfilePage>
+// Définition de la classe _ProfilePageState qui est l'état de ProfilePage
 class _ProfilePageState extends State<ProfilePage> {
-  // Déclaration de la variable isDiscoverPeopleVisible
+  // Déclaration des variables
   bool isDiscoverPeopleVisible = false;
+  String? currentUsername;
+  UserProfile userProfile = UserProfile();
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
-  // Méthode pour construire l'interface utilisateur
+  // Méthode appelée lorsque l'objet est inséré dans l'arbre
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _buildAppBar(), // Appel de la méthode _buildAppBar
-      body: _buildBody(), // Appel de la méthode _buildBody
-      bottomNavigationBar: _buildBottomNavigationBar(), // Appel de la méthode _buildBottomNavigationBar
-    );
+  void initState() {
+    super.initState();
+    _selectRandomUser(); // Sélection d'un utilisateur aléatoire au démarrage
   }
 
-  // Méthode pour construire la AppBar
-  AppBar _buildAppBar() {
-    return AppBar(
-      title: DropdownButton<String>(
-        value: 'hovsep404',
-        items: ['hovsep404', 'OtherUsername'].map((String value) {
-          return DropdownMenuItem<String>(value: value, child: Text(value));
-        }).toList(),
-        onChanged: (_) {},
-      ),
-      actions: [
-        IconButton(icon: const Icon(Icons.menu,color: Colors.black), onPressed: () {}),
-        IconButton(icon: const Icon(Icons.add_box,color: Colors.black), onPressed: () {}),
-      ],
-    );
+  // Méthode pour sélectionner un utilisateur aléatoire
+  Future<void> _selectRandomUser() async {
+    // Récupération de tous les utilisateurs de la base de données
+    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+    // Création d'une liste de noms d'utilisateurs à partir des données récupérées
+    final usernames = snapshot.docs.map((doc) => doc['username']).toList();
+    // Sélection d'un index aléatoire
+    var random = Random();
+    int randomIndex = random.nextInt(usernames.length);
+    // Sélection du nom d'utilisateur correspondant à l'index aléatoire
+    currentUsername = usernames[randomIndex];
+    // Récupération des données de l'utilisateur sélectionné
+    FirebaseFirestore.instance.collection('users').doc(currentUsername).get().then((DocumentSnapshot documentSnapshot) {
+      if (documentSnapshot.exists) {
+        // Si l'utilisateur existe, mise à jour de userProfile avec les données de l'utilisateur
+        Map<String, dynamic> data = documentSnapshot.data() as Map<String, dynamic>;
+        userProfile = UserProfile(
+          username: data['username'],
+          profileImageUrl: data['profileImageUrl'],
+          imagesPost: data['imagesPost'],
+          description: data['description'],
+          numPosts: data['numPosts'],
+          numFollowers: data['numFollowers'],
+          numFollowing: data['numFollowing'],
+        );
+        // Mise à jour de l'interface utilisateur
+        setState(() {});
+      } else {
+        print('Document does not exist on the database');
+      }
+    });
   }
+  // Méthode pour construire l'interface utilisateur
+@override
+Widget build(BuildContext context) {
+  return RefreshIndicator(
+    key: _refreshIndicatorKey,
+    onRefresh: _refresh,
+    child: Scaffold(
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    ),
+  );
+}
 
+
+// Méthode pour construire la AppBar
+AppBar _buildAppBar() {
+  return AppBar(
+    // Utilisation de StreamBuilder pour écouter les mises à jour de la collection 'users' dans Firestore
+    title: StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+      builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+        // Si les données ne sont pas encore chargées, affichez 'Loading...'
+        if (!snapshot.hasData) return const Text('Chargement...');
+        // Création d'une liste de noms d'utilisateurs à partir des données récupérées
+        final usernames = snapshot.data!.docs.map((doc) => doc['username']).toList();
+        // Si currentUsername est null ou n'est pas dans la liste des noms d'utilisateurs, sélectionnez le premier nom d'utilisateur
+        currentUsername = currentUsername == null || !usernames.contains(currentUsername) ? usernames.first : currentUsername;
+        // Création d'un DropdownButton pour sélectionner un nom d'utilisateur
+        return DropdownButton<String>(
+          value: currentUsername,
+          items: usernames.map((username) {
+            return DropdownMenuItem<String>(
+              value: username,
+              child: Text(username),
+            );
+          }).toList(),
+          // Lorsqu'un nouvel utilisateur est sélectionné, mettez à jour currentUsername et récupérez les données de l'utilisateur sélectionné
+          onChanged: (String? newValue) {
+            setState(() {
+              currentUsername = newValue;
+              // Récupération des données de l'utilisateur sélectionné à partir de Firebase
+              FirebaseFirestore.instance.collection('users').doc(newValue).get().then((DocumentSnapshot documentSnapshot) {
+                if (documentSnapshot.exists) {
+                  // Si l'utilisateur existe, mettez à jour l'interface utilisateur avec les données de l'utilisateur sélectionné
+                  Map<String, dynamic> data = documentSnapshot.data() as Map<String, dynamic>;
+                  userProfile = UserProfile(
+                    username: data['username'],
+                    profileImageUrl: data['profileImageUrl'],
+                    imagesPost: data['imagesPost'],
+                    description: data['description'],
+                    numPosts: data['numPosts'],
+                    numFollowers: data['numFollowers'],
+                    numFollowing: data['numFollowing'],
+                  );
+                  setState(() {});
+                } else {
+                  print('Le document n\'existe pas dans la base de données');
+                }
+              });
+            });
+          },
+        );
+      },
+    ),
+    // Ajout de boutons d'action à la AppBar
+    actions: [
+      IconButton(icon: const Icon(Icons.menu,color: Colors.black), onPressed: () {}),
+      IconButton(icon: const Icon(Icons.add_box,color: Colors.black), onPressed: () {}),
+      IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Rafraîchir',
+          onPressed: () {
+            _refreshIndicatorKey.currentState?.show();
+          }),
+    ],
+  );
+}
+
+// Méthode pour rafraîchir les données de l'utilisateur
+Future<Null> _refresh() {
+  return UserProfile.createAndAddUserProfile().then((_) {
+    setState(() {});
+  });
+}
 // Méthode pour construire le corps de la page
 Widget _buildBody() {
-    return DefaultTabController(
+  return RefreshIndicator(
+    onRefresh: UserProfile.createAndAddUserProfile,
+    child: DefaultTabController(
       length: 2,
       child: Column(
         children: [
@@ -50,7 +156,7 @@ Widget _buildBody() {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Hello world :3',
+                userProfile.description,
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -61,9 +167,9 @@ Widget _buildBody() {
           _buildTabBarView(),
         ],
       ),
-    );
-  }
-
+    ),
+  );
+}
   // Méthode pour construire la section du profil
   Widget _buildProfileSection() {
     return Padding(
@@ -71,10 +177,10 @@ Widget _buildBody() {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          const CircleAvatar(radius: 45, backgroundImage: NetworkImage('https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRUIIySyAaGSzpAyuQdq6IjdVV5w0jKdpToY01jaH-OXFYadDWg')),
-          _buildProfileInfo('Posts', '24'),
-          _buildProfileInfo('Followers', '404'),
-          _buildProfileInfo('Following', '505'),
+          CircleAvatar(radius: 45, backgroundImage: NetworkImage(userProfile.profileImageUrl)),
+          _buildProfileInfo('Posts', userProfile.numPosts.toString()),
+          _buildProfileInfo('Followers', userProfile.numFollowers.toString()),
+          _buildProfileInfo('Following', userProfile.numFollowing.toString()),
         ],
       ),
     );
@@ -166,40 +272,41 @@ Widget _buildBody() {
   }
 
   // Méthode pour construire la grille d'images
-  GridView _buildImageGrid() {
-    return GridView.count(
-      crossAxisCount: 3,
-      children: List.generate(48, (index) {
-        return Padding(
-          padding: const EdgeInsets.all(1.0),
-          child: Image.network('https://picsum.photos/200?random=$index'),
-        );
-      }),
-    );
-  }
+GridView _buildImageGrid() {
+  List<String> images = userProfile.imagesPost.split(',');
+  return GridView.count(
+    crossAxisCount: 3,
+    children: List.generate(images.length, (index) {
+      return Padding(
+        padding: const EdgeInsets.all(1.0),
+        child: Image.network(images[index]),
+      );
+    }),
+  );
+}
 
   // Méthode pour construire la BottomNavigationBar
-  BottomNavigationBar _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      showSelectedLabels: false,
-      showUnselectedLabels: false,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home, color: Colors.black,), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.search,color: Colors.black), label: 'Search'),
-        BottomNavigationBarItem(icon: Icon(Icons.add_box,color: Colors.black), label: 'Upload'),
-        BottomNavigationBarItem(icon: Icon(Icons.smart_display_outlined,color: Colors.black), label: 'Likes'),
-        BottomNavigationBarItem(
-          label: "",
-          icon: CircleAvatar(
-            backgroundColor: Colors.black,
-            radius: 13,
-            child: CircleAvatar(
-              backgroundImage: NetworkImage('https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRUIIySyAaGSzpAyuQdq6IjdVV5w0jKdpToY01jaH-OXFYadDWg'),
-              radius: 11,
-            ),
+BottomNavigationBar _buildBottomNavigationBar() {
+  return BottomNavigationBar(
+    showSelectedLabels: false,
+    showUnselectedLabels: false,
+    items: [
+      BottomNavigationBarItem(icon: Icon(Icons.home, color: Colors.black,), label: 'Home'),
+      BottomNavigationBarItem(icon: Icon(Icons.search,color: Colors.black), label: 'Search'),
+      BottomNavigationBarItem(icon: Icon(Icons.add_box,color: Colors.black), label: 'Upload'),
+      BottomNavigationBarItem(icon: Icon(Icons.smart_display_outlined,color: Colors.black), label: 'Likes'),
+      BottomNavigationBarItem(
+        label: "",
+        icon: CircleAvatar(
+          backgroundColor: Colors.black,
+          radius: 13,
+          child: CircleAvatar(
+            backgroundImage: NetworkImage(userProfile.profileImageUrl),
+            radius: 11,
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 }
