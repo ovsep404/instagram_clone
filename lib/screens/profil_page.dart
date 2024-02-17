@@ -7,11 +7,11 @@ import 'package:clone_instagram/user_profile.dart';
 // Définition de la classe ProfilePage qui est un StatefulWidget
 class ProfilePage extends StatefulWidget {
   @override
-  _ProfilePageState createState() => _ProfilePageState();
+  ProfilePageState createState() => ProfilePageState();
 }
 
 // Définition de la classe _ProfilePageState qui est l'état de ProfilePage
-class _ProfilePageState extends State<ProfilePage> {
+class ProfilePageState extends State<ProfilePage> {
   // Déclaration des variables
   bool isDiscoverPeopleVisible = false;
   String? currentUsername;
@@ -22,11 +22,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    _selectRandomUser(); // Sélection d'un utilisateur aléatoire au démarrage
+    selectRandomUser(); // Sélection d'un utilisateur aléatoire au démarrage
   }
 
   // Méthode pour sélectionner un utilisateur aléatoire
-  Future<void> _selectRandomUser() async {
+  Future<void> selectRandomUser() async {
     // Récupération de tous les utilisateurs de la base de données
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
     // Création d'une liste de noms d'utilisateurs à partir des données récupérées
